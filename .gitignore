@@ -1,0 +1,38 @@
+# 配置文件（包含 Webhook 密钥，不要提交）
+invassistant-config.json
+
+# 输出文件
+output/
+*.json
+!package.json
+
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.egg-info/
+dist/
+build/
+*.egg
+
+# 环境
+.env
+.venv/
+venv/
+env/
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# OS
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# CodeBuddy / WorkBuddy
+.codebuddy/
+.workbuddy/
