@@ -1,5 +1,6 @@
 ---
 name: invassistant
+version: "2.0.0"
 description: |
   US stock portfolio buy/sell signal checker — tells you WHEN to buy, WHEN to sell, and WHY.
   Uses a "Three Red Lines" entry filter (emotion-driven drop + technical reversal + no systemic risk)
@@ -156,11 +157,15 @@ The **ONLY exit that overrides HOLD** strategy. Protects the entire portfolio:
 
 ## Workflow | 工作流程
 
-### Step 1: Load Config | 确认配置
+### Step 1: Load Config [Deterministic] | 确认配置 [确定性]
 
-1. Read `invassistant-config.json` from workspace | 读取工作区中的配置文件
-2. If missing, run `python scripts/init_config.py` to generate defaults | 如不存在，执行初始化生成默认配置
-3. Confirm watchlist and strategy parameters | 确认关注标的和策略参数
+Config search order | 配置文件查找顺序：
+1. `INVASSISTANT_CONFIG` env variable | 环境变量指定路径
+2. `my_portfolio.json` in project root (personal format, auto-adapted) | 项目根目录个人配置（自动适配）
+3. `invassistant-config.json` in project root (standard Skill format) | 项目根目录通用配置
+4. Built-in defaults via `scripts/init_config.py` | 内置默认配置
+
+If neither file exists, run `python scripts/init_config.py` to generate defaults.
 
 Key config sections | 配置核心结构：
 - `portfolio.watchlist` — Stock watchlist (symbol, strategy, params, exit_params) | 关注标的列表
@@ -169,7 +174,7 @@ Key config sections | 配置核心结构：
 - `adapters` — Push channels (wechatwork / dingtalk / feishu) | 推送渠道
 - `commands` — Command-to-action mapping | 指令映射
 
-### Step 2: Run Check | 执行检查
+### Step 2: Run Check [Deterministic] | 执行检查 [确定性]
 
 Choose execution mode based on user command | 根据用户指令选择执行模式：
 
@@ -188,7 +193,7 @@ python scripts/portfolio_checker.py --detail TSLA
 python scripts/portfolio_checker.py --push
 ```
 
-### Step 3: Read Output | 解读输出
+### Step 3: Read Output [Deterministic] | 解读输出 [确定性]
 
 Results show **entry signals** and **exit signals** per holding | 检查结果按标的输出入场信号和退出信号：
 
@@ -208,7 +213,7 @@ Portfolio self-check summary (5 questions) | 全组合自检汇总：
 4. Systemic risk detected? (VIX panic + market crash) | 是否出现系统性风险？
 5. Final verdict: BUY / SELL / NO TRADE | 综合结论：入场 / 退出 / 不交易
 
-### Step 4: Push Alerts (Optional) | 推送（按配置）
+### Step 4: Push Alerts (Optional) [Deterministic] | 推送（按配置）[确定性]
 
 Push results via configured channels | 根据配置推送结果：
 
@@ -321,6 +326,30 @@ Map group bot commands to actions | 映射群机器人指令到动作：
 ## Quick Entry Scripts | 快捷入口
 
 Convenience scripts in project root | 项目根目录的兼容入口脚本：
-- `check_portfolio.py` — Full portfolio check | 全组合检查
+- `check_portfolio_v2.py` — **Recommended**: Modular entry point calling scripts/ | 推荐入口（模块化）
+- `check_portfolio.py` — Legacy full-check (fallback) | 旧版全量检查（回退用）
 - `check_tsla_entry.py` — TSLA red line check | TSLA 红线检查
 - `check_detail.py` — TSLA detailed analysis | TSLA 详细分析
+
+---
+
+## Hard Rules | 硬性规则
+
+These rules are **absolute** — no exceptions, no overrides:
+
+1. **Signal priority is fixed**: Stop-loss > Take-profit > Trend-break > Momentum-fade > Systemic-risk. Higher priority signal fires → skip lower checks.
+2. **Red Lines are filters, NOT scores**: ALL three must pass → BUY. One fails → NO TRADE. Never "average" or "weigh" partial passes.
+3. **Never fabricate data**: If API returns error or empty data → report the failure. Never invent prices, volumes, or signals.
+4. **HOLD protection**: HOLD strategy holdings are immune to all exit signals EXCEPT systemic risk (VIX ≥ 30). Never suggest selling HOLD positions for profit-taking or trend breaks.
+5. **Push confirmation**: Before sending any push notification (WeChat Work / DingTalk / Feishu), confirm with user UNLESS running in automated mode (`--push` flag).
+
+## Failure Handling | 失败处理
+
+| Scenario | Action |
+|----------|--------|
+| Config file missing | Run `python scripts/init_config.py`, report to user |
+| Yahoo Finance API rate limit / timeout | Retry once after 5s. If still fails, report which symbols failed and continue with remaining |
+| Insufficient historical data (< 20 days) | Skip technical analysis for that symbol, note in output |
+| `cost_basis` not configured | Skip take-profit / stop-loss for that symbol, warn user |
+| Push channel webhook fails | Log error, continue with other channels, report failure in output |
+| All symbols fail to fetch | Report complete failure, suggest checking network / API status |
