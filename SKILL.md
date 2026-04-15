@@ -1,7 +1,7 @@
 ---
 name: invassistant
 version: "2.0.0"
-description: |
+description: >
   US stock portfolio buy/sell signal checker — tells you WHEN to buy, WHEN to sell, and WHY.
   Uses a "Three Red Lines" entry filter (emotion-driven drop + technical reversal + no systemic risk)
   and a multi-layered exit engine (take-profit tiers, stop-loss, trend break, momentum fade, VIX panic defense).
@@ -12,11 +12,31 @@ description: |
   基于「三条红线」入场过滤（情绪释放+技术止跌+市场环境）和多层退出引擎
   （阶梯止盈/止损清仓/趋势破位/动量衰竭/VIX恐慌防守），
   从 Yahoo Finance 获取实时行情，逐标的检查买卖信号，推送到企微/钉钉/飞书群机器人。
-
-  Trigger keywords: 检查持仓, 持仓信号, 今日信号, 红线检查, TSLA红线, 建仓检查,
-  减仓信号, 止盈检查, 止损检查, 退出信号, 清仓检查, 趋势破位, 动量衰竭,
-  portfolio check, trading signal, entry check, exit check, red line check, stock signal,
-  take profit, stop loss, 投资信号, 交易信号, 持仓检查, 详细分析.
+read_when:
+  - 检查持仓
+  - 持仓信号
+  - 今日信号
+  - 红线检查
+  - TSLA红线
+  - 建仓检查
+  - 减仓信号
+  - 止盈检查
+  - 止损检查
+  - 退出信号
+  - 趋势破位
+  - 动量衰竭
+  - portfolio check
+  - trading signal
+  - entry check
+  - exit check
+  - red line check
+  - stock signal
+  - take profit
+  - stop loss
+  - 投资信号
+  - 交易信号
+  - 持仓检查
+  - 详细分析
 allowed-tools:
   - read_file
   - write_to_file
