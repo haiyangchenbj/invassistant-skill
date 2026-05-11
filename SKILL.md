@@ -2,21 +2,19 @@
 name: invassistant
 description: |
   Investment portfolio management system covering A-shares (A股), US stocks (美股), and HK stocks (港股).
-  v1.5: "可执行系统" — 从完美规则到合理决策。
-  A-shares: Three-condition entry system (引擎评分≥80 + 价格≤目标 + MA20企稳) with v1.4 enhancements
-  + v1.5 time-stop (6-month max observation) + dynamic target floor (静态×0.85).
-  US stocks: Dual-mode entry system — Mode A (Three Red Lines/panic entry) + Mode B (trend confirmation/new).
-  HK stocks: Position source classification (主动买入→标准止损 / 配股激励→警戒线+减持框架).
-  Portfolio-level risk control: -12% forced reduction, -15% extreme defense, sector ≤70%, single ≤30%.
+  v1.5.1: Core position trailing stop — replace ladder take-profit to avoid cutting winners in AI bull market.
+  A-shares: Three-condition entry system with v1.4 enhancements + v1.5 time-stop + dynamic target floor.
+  US stocks: Dual-mode entry (Mode A: Three Red Lines / Mode B: trend confirmation).
+  US core positions (hold/pullback): Trailing stop mode (-20%/-15% from recent high, 2-day confirmation).
+  US new entries (trend/redline): Ladder take-profit kept for discipline.
+  HK stocks: Position source classification (buy→standard, grant→warning line + reduction framework).
+  Portfolio-level risk control: -12% forced reduction, sector ≤70%, single ≤30%.
   Override Protocol: tiered override permissions with mandatory recording.
-  Supports pre-market analysis, post-market review, trading signal checks, and Notion sync.
   Trigger keywords: 检查持仓, 持仓信号, 今日信号, 红线检查, 建仓检查, 减仓信号, 止盈检查, 止损检查,
-  退出信号, 清仓检查, 趋势破位, 动量衰竭, portfolio check, trading signal, entry check, exit check,
-  red line check, stock signal, take profit, stop loss, 投资信号, 交易信号, 持仓检查, 详细分析,
-  盘前分析, 盘后复盘, 选股引擎, 三条件, 弹性窗口, 动态目标价, 韧性降级, 动量双轨, 财报规则,
+  追踪止损, 趋势破位, 动量衰竭, portfolio check, trailing stop, 投资信号, 交易信号, 持仓检查,
+  盘前分析, 盘后复盘, 三条件, 弹性窗口, 动态目标价, 韧性降级, 动量双轨, 财报规则,
   A股策略, 美股策略, 港股持仓, 投资组合, 调仓纪律, 周五风险清单, 精选层, 观察池, ETF底仓,
-  pre-market analysis, post-market review, stock screener, earnings season,
-  双模式, 趋势入场, override, 组合风控, 回撤, 时间止损, 观察池.
+  双模式, 趋势入场, override, 组合风控, 回撤, 时间止损, 核心仓, 让利润奔跑.
 allowed-tools:
   - read_file
   - write_to_file
@@ -40,11 +38,12 @@ metadata:
       - hk-stock
 ---
 
-# InvAssistant v1.5 — 个人投资组合管理系统
+# InvAssistant v1.5.1 — 个人投资组合管理系统
 
 > **核心定位**：可执行的个人投资框架，非机构量化系统。规则是栏杆不是牢笼。
 
-**策略版本**: v1.5（2026-05-11）
+**策略版本**: v1.5.1（2026-05-11）
+- v1.5.1增量：核心仓追踪止损（替代阶梯止盈）— 让利润奔跑，避免牛市过早砍赢家
 **配置文件**: `my_portfolio.json`（A股+港股） / `invassistant-config.json`（美股+观察池）
 
 ---
@@ -140,24 +139,43 @@ VIX > 20 或 近月大盘跌 > 5% → 用模式A（等恐慌入场）
 VIX < 20 且 大盘MA50以上   → 用模式B（趋势确认入场）
 ```
 
-### 2.4 退出信号系统（不变）
+### 2.4 退出信号系统（v1.5.1 核心仓追踪止损）
 
-| 优先级 | 类型 | 条件 | 动作 |
+**核心认知**：阶梯止盈在AI大牛市中会过早砍掉赢家。核心持仓用**追踪止损（Trailing Stop）**让利润奔跑。
+
+#### 核心仓（hold/pullback）：追踪止损模式
+
+- **不主动止盈**，浮盈不触发减仓
+- **追踪止损价 = 近期高点 × (1 - 回撤阈值)**
+  - hold类型：-20%
+  - pullback类型：-15%
+- **两日确认**：收盘跌破→候选退出；次日仍破→开盘清仓；次日收回→取消
+- **每周一盘前重算**
+
+#### 新建仓（redline/trend）：阶梯止盈
+
+- +20%→减1/3；+40%→再减1/3；+80%→仅保留底仓
+- 硬止损：模式A -15%，模式B MA50下方3%
+
+#### 退出信号优先级链
+
+| 优先级 | 类型 | 适用 | 动作 |
 |--------|------|------|------|
-| 🔴 CRITICAL | 止损清仓 | 浮亏超止损线 | 立即清仓 |
-| 🟠 HIGH | 止盈减仓 | 浮盈达阶梯 | 分批减仓 |
-| 🟠 HIGH | 趋势破位 | 连续N日<MA50+拐头 | 减仓50% |
-| 🟡 MEDIUM | 动量衰竭 | 量价背离/MACD顶背离 | 减仓1/3 |
-| ⚫ OVERRIDE | 系统性风险 | VIX≥30/≥40 | 非核心减半/全组合50% |
+| 🔴 CRITICAL | 硬止损 | 新建仓 | 立即清仓 |
+| 🔴 CRITICAL | 追踪止损触发 | 核心仓 | 两日确认后清仓 |
+| 🟠 HIGH | 阶梯止盈 | 仅新建仓 | 分批减仓 |
+| 🟠 HIGH | 趋势破位 | 全部 | 减仓50% |
+| 🟡 MEDIUM | 动量衰竭 | 全部 | 减仓1/3 |
+| ⚫ OVERRIDE | 系统性风险 | 全组合 | VIX≥30减半/≥40全组合50% |
 
-### 2.5 策略类型
+### 2.5 策略类型（v1.5.1）
 
-| 类型 | 说明 | 入场方式 |
-|------|------|----------|
-| `redline` | 恐慌入场 | 模式A |
-| `trend` | 趋势入场 | 模式B（新增） |
-| `hold` | 永久持有 | 不生成卖出信号（系统性风险除外） |
-| `pullback` | 回调加仓 | 已持仓回调≥6%+量能收敛 |
+| 类型 | 说明 | 入场 | 退出 |
+|------|------|------|------|
+| `redline` | 恐慌入场 | 模式A | 阶梯止盈+硬止损(-15%) |
+| `trend` | 趋势入场 | 模式B | 阶梯止盈+MA50下方3%止损 |
+| `hold` | 永久持有 | 历史持仓 | **追踪止损(-20%)** |
+| `pullback` | 回调加仓 | 已持仓回调≥6%+量能收敛 | **追踪止损(-15%)** |
 
 ### 2.6 美股观察池
 
