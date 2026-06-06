@@ -1,18 +1,9 @@
 ---
 name: invassistant
-description: |
-  个人投资组合管理框架 v2.1.1（执行简化版）。覆盖 A 股、港股、美股全市场。
-  核心命题：减少交易规则，强化资产分层。组合优先于选股，纪律优先于灵感。
-  资产三层分类（A 类平台核心 / B 类高弹性 / C 类低波动收益）+ 7 红线 + 4 因子 QMS 评分。
-  A 类不适用追踪止损（仅 3 类基本面理由可卖）；B 类追踪止损 + 仓位管理；C 类 DCA 再平衡。
-  新增 §7.4 模式 D：A 类候选池建仓（不带观察延迟，回调触-10%→立即首笔50%）。
-  组合层风控：单标的≤25%、单行业≤35%、AI 单一叙事≤50%、回撤梯度防御、VIX 系统性风险红线。
-  Override Protocol：分级权限 + 强制记录 + 同标的≤2 次/季。
-  触发关键词：检查持仓, 持仓信号, 红线检查, 建仓检查, 减仓信号, 止盈检查, 止损检查,
-  追踪止损, 趋势破位, 动量衰竭, portfolio check, trailing stop, 投资信号, 交易信号,
-  盘前分析, 盘后复盘, A股策略, 美股策略, 港股持仓, 投资组合, 调仓纪律, 观察池, ETF底仓,
-  override, 组合风控, 回撤, 核心仓, 让利润奔跑, 资产分类, A类, B类, C类, QMS, 7红线,
-  Pre-Trade Log, 中美对冲, 月度KPI, 财报豁免阀, 候选建仓, 模式D, COST, LLY, AXP, MCO.
+description: >
+  Multi-asset investment portfolio management framework with A/B/C asset-class differentiated rules,
+  7 red-line portfolio risk controls, and 4-factor QMS quality scoring.
+  Covers US, A-share (China), and HK stocks with disciplined entry/exit logic.
 allowed-tools:
   - read_file
   - write_to_file
@@ -29,275 +20,191 @@ metadata:
       - investment
       - trading
       - portfolio
-      - signal
       - stock
       - finance
+      - us-stock
       - a-share
       - hk-stock
-      - us-stock
+      - risk-control
 ---
 
-# InvAssistant v2.1.2 — 个人投资组合管理框架
+# InvAssistant
 
-> **核心定位**：可执行的个人投资框架，非机构量化系统。规则是栏杆不是牢笼。
->
-> **设计哲学**：组合优先于选股，资产分层优先于规则细节，纪律优先于灵感。
-
-**策略版本**: v2.1.2（2026-06-06，审计清理版）
-- 核心革新：资产三层分类（A/B/C）替代统一规则 + §7.4 模式 D（A 类候选建仓）
-- 审计清理：删除过期文件，README 中英双语重写，版本历史完整
+> Multi-asset investment portfolio management framework — current version v2.1.2 (2026-06-06).
+> Core philosophy: portfolio before stock-picking, discipline before inspiration. Rules are guardrails, not cages.
 
 ---
 
-## 一、v2.1 三个不可违反的事实
+## 1. Asset Classification (Three Tiers)
 
-### 1.1 资产三层分类决定动作语义
+This is the foundation of v2.1+. Different assets use different exit logic.
 
-| 分类 | 定义 | 适用规则 | 卖出门槛 |
-|------|------|----------|----------|
-| **A 类（平台核心）** | 长期叙事+护城河+现金流稳定的平台型资产 | **不适用追踪止损**；DCA + HOLD | 仅 3 类理由：①基本面恶化（连续 2 季营收/利润 -15%+）②长期叙事改变 ③组合风险超限 |
-| **B 类（高弹性周期）** | 高 Beta、估值波动大、叙事驱动的成长股 | 追踪止损 + 仓位管理 | QMS<40 触发减仓评估 |
-| **C 类（低波动收益）** | 宽基/红利 ETF、公用事业类核心仓 | DCA + 组合再平衡 | 不主动选时 |
+| Tier | Definition | Rules | When To Sell |
+|------|-----------|-------|-------------|
+| **A-Class (Platform Core)** | Long-moat, cash-flow-stable platform companies | HOLD, no trailing stop; DCA entries | Only 3 reasons: ① fundamental deterioration (2+ quarters) ② narrative change ③ portfolio limit breach |
+| **B-Class (High-Beta Cyclical)** | High-beta, narrative-driven growth | Trailing stop + position management | QMS < 40 triggers review |
+| **C-Class (Low-Volatility Income)** | Broad-market/dividend ETFs, utilities | DCA + rebalancing | No active timing |
 
-**关键认知**：
-- A 类资产价格回撤 ≠ 卖出信号
-- B 类才用追踪止损，A 类用追踪止损会洗出长期赢家
-- 把 A 类当 B 类管理是 v2.0 最严重的错判，v2.1 已纠正
+Key insight: A-class price drawdowns ≠ sell signals. Using trailing stops on A-class washes out long-term compounders.
 
-详见 `references/us_stock_strategy.md`。
+---
 
-### 1.2 持仓 vs 观察池语义严格区分
+## 2. Portfolio Risk Controls: 7 Red Lines (Non-Overridable)
 
-| 状态 | 决策语义 |
-|------|----------|
-| **持仓** | 谈"是否 HOLD / 是否减仓 / 是否加仓" |
-| **观察池** | 谈"是否新建仓 / 是否从精选层移除/降级"，**不存在"减仓"** |
+| # | Rule | Threshold | Action |
+|---|------|-----------|--------|
+| 1 | Single position concentration | >25% | Reduce to ≤20% within 3 months |
+| 2 | Single sector concentration | >35% | Reduce to ≤30% within 3 months |
+| 3 | AI single-narrative | >50% | Reduce to ≤40% within 6 months |
+| 4 | Portfolio drawdown (mild) | >-12% | Halve satellite positions |
+| 5 | Portfolio drawdown (severe) | >-15% | Total position ≤60% |
+| 6 | VIX systemic risk | ≥40 | Reduce total to ≤50% |
+| 7 | Pre-Trade Log compliance | <100% | Log immediately |
 
-未持仓标的不允许出现"减仓 50%"这种措辞。
+---
 
-### 1.3 v2.1 严禁的卖出理由
+## 3. US Stock Strategy
+
+### Entry Modes
+
+| Mode | Applies To | Logic |
+|------|-----------|-------|
+| **A (Panic Mispricing)** | B-Class (TSLA/NVDA extreme) | Emotion release + technical support + VIX <25 |
+| **B (Trend Confirmation)** | B-Class | Price > MA50 + breakout + fundamentals + valuation |
+| **C (Rebalancing)** | Portfolio-level | Triggered by Red Lines 1-3 only |
+| **D (A-Class Candidate Zone Entry)** | Candidate pool (non-tech diversification targets) | Callback-based, no observation delay |
+
+### Mode D: A-Class Candidate Zone Entry (v2.1.1)
+
+Applied to new A-class candidates before they join the core portfolio. Designed to solve the "observation delay misses entry window" problem.
+
+**Principle**: No observation delay. A -10% pullback from 20D high on an A-class candidate is itself a complete entry signal — the underlying moat business doesn't change with share price.
+
+| Zone | Trigger | Allocation | Execution |
+|------|---------|------------|-----------|
+| First tranche | -10% from 20D high | 50% of target | Execute immediately |
+| Add | -15% (or >3% further drop after first) | 30% | Execute on trigger |
+| Final | -20% (or 5+ days sideways without new low) | 20% | Within zone |
+
+**Constraints**: total ≤2% portfolio; MCO requires PE percentile <60%; no chasing after rebound.
+
+### Why Different from TSLA Mode A
+
+TSLA (B-Class satellite) needs bottom confirmation — the drop might be fundamentally justified. A-class candidates (moat compounders) only need price confirmation — a -10% discount on a quality business is self-evidently an opportunity.
+
+---
+
+## 4. A-Share Strategy (3-Condition Engine)
+
+All three conditions must pass for entry:
+
+| Condition | Standard |
+|-----------|----------|
+| ① Engine score ≥80 + 3 consecutive days on list | Core selection pool |
+| ② Current price ≤ dynamic target (with floor) | `max(static×0.85, min(static, MA20×0.95))` |
+| ③ MA20 flat or turning up | MA20 delta ≥ -0.05 |
+
+**Flex window**: 2/3 conditions met + 3rd deviation ≤10% → half-position trial.
+**Time stop**: 6 months max in selection pool without entry → forced review.
+
+---
+
+## 5. HK Stock Strategy
+
+| Source | Framework |
+|--------|-----------|
+| Actively bought | Follow A/B/C classification rules |
+| Company allocation/incentive | Warning line + reduction framework (not hard stop) |
+
+**Warning line** (not hard stop): Triggers 48h review upon breach.
+**Time limit**: 18 months post-vesting with remaining position → unconditional full exit.
+
+---
+
+## 6. QMS Scoring (4-Factor)
 
 ```
-❌ "涨多了"            ❌ +15%/+30%/+50% 阶梯止盈（已删除）
-❌ "回调几天"          ❌ "A 类追踪止损触发"（已删除）
-❌ "获利焦虑"          ❌ QoQ 硬触发减仓（已删除）
-❌ "短期跌破均线"      ❌ Override 季度配额（已删除）
+QMS = 0.35 × Earnings Trend
+    + 0.25 × Sector Relative Strength
+    + 0.25 × EPS Revision
+    + 0.15 × Price Structure
 ```
 
----
+| Score | Meaning | Action |
+|-------|---------|--------|
+| ≥70 | High quality + good timing | Hold / observe entry |
+| 50-70 | Healthy, not at entry point | HOLD |
+| <50 | Quality or timing issues | No new positions |
+| <40 | Review exit queue | Evaluate reduction (B-Class only) |
 
-## 二、组合层风控：7 红线（不可 Override）
-
-| # | 红线 | 阈值 | 触发动作 |
-|---|------|------|----------|
-| 1 | 单标的集中度 | >25% | 3 个月内自然降至 ≤20% |
-| 2 | 单行业集中度 | >35% | 3 个月内降至 ≤30% |
-| 3 | AI 单一叙事 | >50% | 6 个月内降至 ≤40% |
-| 4 | 组合回撤（轻度） | >-12% | 卫星仓减半 |
-| 5 | 组合回撤（重度） | >-15% | 总仓 ≤60% |
-| 6 | VIX 系统性风险 | ≥40 | 全组合减至 ≤50% |
-| 7 | Pre-Trade Log 登记率 | <100% | 立即补登 |
-
-详细分级、Override Protocol、对冲触发器、QMS 评分见 `references/risk_control_and_overrides.md`。
+**Boundary**: QMS is entry reference for A-Class, NOT an exit trigger. Only B-Class uses QMS <40 as reduction signal.
 
 ---
 
-## 三、A 股策略（三条件 + 弹性窗口）
+## 7. Monthly KPIs
 
-三条件**全部满足**才允许建仓：
-
-| 条件 | 标准 |
-|------|------|
-| ① 引擎评分 ≥80 分 + 连续 3 日在榜 | 选股引擎核心池 |
-| ② 当前价 ≤ 动态目标价（含地板） | `max(静态×0.85, min(静态, MA20×0.95))` |
-| ③ MA20 走平或拐头 | MA20 delta ≥ -0.05 |
-
-- **弹性窗口**：2/3 满足 + 第三个偏差 ≤10% → 半仓试探
-- **时间止损**：精选层最长观察 6 个月，到期强制评估
-- **不强行追求 A 股 25-35% 比例**（v2.1 明确：流动性约束下不强行加仓）
-
-详见 `references/a_share_strategy.md`。
+| KPI | Threshold | Type |
+|-----|-----------|------|
+| Monthly turnover rate | ≤15% | Red line |
+| Pre-Trade Log compliance | =100% | Red line |
+| A-Class sold on price volatility | =0 | Red line |
+| Panic-period reduction (VIX≥30) | =0 | Red line |
+| System execution rate | ≥80% | KPI |
 
 ---
 
-## 四、美股策略（按 A/B/C 分类 + 候选池建仓）
+## 8. Hard Rules Summary
 
-- **A 类**：HOLD + 分批建仓 + 仅 3 类基本面理由可卖
-- **B 类**：模式 A（恐慌入场，三红线）/ 模式 B（趋势确认，四条件） + 追踪止损（-15%/-20%）
-- **C 类**：DCA + 组合再平衡
-
-模式选择：`VIX > 20 或近月大盘跌 > 5% → 模式 A；VIX < 20 且大盘 MA50 以上 → 模式 B`
-
-### 模式 D：A 类候选池建仓（v2.1.1 新增）
-
-**适用**：A 类候选池（COST / LLY / AXP / MCO），首次建仓。
-
-**核心原则**：**不带观察延迟。回调触及区间 = 建仓信号。不等底部确认。**
-
-与 TSLA（B 类卫星）的根本差异：TSLA 的下跌可能是有理由的（叙事破裂），需要确认底部。A 类候选（COST 等稳健复利型）的回调只是价格——-10% 本身已是完整的买入信号。
-
-**三级区间建仓**（总目标 ≤2% 总资产）：
-
-| 区间 | 触发条件 | 仓位 | 执行方式 |
-|------|----------|------|----------|
-| 首笔 | 距 20D 高 -10% | 50% 目标仓位 | **立即执行**，不观察 |
-| 加仓 | 距 20D 高 -15%（或首笔后继续跌≥3%） | 30% | 触发即执行 |
-| 尾笔 | 距 20D 高 -20%（或首笔后横盘≥5 日未破新低） | 20% | 区间内执行 |
-
-**约束**：
-- MCO 额外要求 PE 分位 <60%
-- 首笔 ≤1.5% 总资产 / 加仓 ≤0.9% / 尾笔 ≤0.6%
-- 禁止追涨：已反弹脱离区间 → 等下一次
-
-详见 `references/us_stock_strategy.md`。
+1. Asset classification determines action semantics: A-Class no trailing stop, B-Class uses trailing stop
+2. Held vs. watchlist semantics must not be mixed
+3. A-share 3-condition is a filter: all pass → entry (flex window = 2/3 + deviation + half-size)
+4. US B-Class dual-mode: Mode A (3 red lines all pass) / Mode B (4 conditions all pass)
+5. Unfilled ≠ holding: portfolio data must reflect actual positions
+6. Never fabricate data: all indicators must come from live data sources
+7. A-Class only sells on 3 fundamental reasons (never price)
+8. 7 Red Lines triggered = must follow, no override
+9. Allocation/incentive positions do not use standard stops
+10. Every override must be logged
+11. Max 2 overrides per ticker per quarter; 3rd is void
+12. Daily self-check: 5 questions, all "no" = no trade today
 
 ---
 
-## 五、港股策略
+## 9. Data Sources
 
-| 来源 | 退出框架 |
-|------|----------|
-| **主动买入** | 按 A/B/C 分类标准管理 |
-| **公司配股/激励** | 不设硬止损，用警戒线 + 减持框架 |
-
-- **警戒线**（非硬止损）：跌破后触发 48h 评估，**警戒线 = 基本面评估触发点**
-- **减持策略**：反弹至短期均线附近时分批减持
-- **时间兜底**：交割后 18 个月仍有余仓 → 无条件全部清仓
-
----
-
-## 六、月度 KPI（v2.1 红线）
-
-| KPI | 阈值 | 性质 |
-|-----|------|------|
-| 月换手率 | ≤15% | 红线（v2.0 是 25%） |
-| Pre-Trade Log 登记率 | =100% | 红线 |
-| **A 类因价格波动卖出** | =0 笔 | 红线 |
-| 恐慌期减仓（VIX≥30） | =0 | 红线 |
-| 系统满足执行率 | ≥80% | KPI |
-
----
-
-## 七、硬性规则总表
-
-> 以下规则优先级高于一切，不可违反。
-
-1. **资产分类决定动作语义**：A 类不追踪止损，B 类才用追踪止损
-2. **持仓与观察池语义不可混用**：未持仓不存在"减仓"
-3. **A 股三条件是过滤器**：全部通过才建仓（弹性窗口=2/3+偏差内+半仓）
-4. **美股 B 类双模式各有标准**：模式 A 三红线全过 / 模式 B 四条件全过
-5. **未成交 ≠ 已建仓**：组合数据必须反映真实持仓
-6. **不编造数据**：所有指标必须来自实时数据源
-7. **A 类只在 3 类基本面理由下卖出**：价格波动不算
-8. **7 红线触发不可 Override**
-9. **配股/激励持仓不适用标准止损**：用警戒线 + 减持框架
-10. **每次 Override 必须记录**：无记录视为违规
-11. **同标的 Override ≤2 次/季**：第 3 次自动作废
-12. **接下来 6-12 月不再加规则**：只做执行复盘
-
----
-
-## 八、每日自检清单
-
-| # | 问题 | 是 | 否 |
-|---|------|----|----|
-| 1 | A 股：三条件通过/弹性窗口触发了吗？ | → 建仓 | → 不操作 |
-| 2 | 美股 B 类：模式 A/B 信号触发了吗？ | → 验证建仓 | → 不交易 |
-| 3 | A 类：触发 3 类基本面卖出理由吗？ | → 评估 | → HOLD |
-| 4 | 7 红线触发了吗？ | → 按红线动作执行 | → 维持 |
-| 5 | 有 Override 正在执行中吗？ | → 检查 deadline | → 正常 |
-
-> **5 个都是"否" = 今天不交易。** 这仍然是最常见也最正确的结果。
-
----
-
-## 九、工作流程
-
-### 9.1 盘前/盘后分析
-
-```
-Step 1: 强制运行体检（不可跳过）
-        - portfolio_audit：7 红线 + A/B/C dashboard
-        - QMS：4 因子评分
-Step 2: 拉行情（westock-data 等数据源）
-        - 美股前缀 us / A 股 sh sz / 港股 hk
-        - VIX = usVIX / 上证 = sh000001 / 沪深300 = sh000300
-Step 3: 按 9 章节生成报告（宏观→事件→A 股→港股→美股→组合风控→操作清单→明日重点→Override+KPI）
-Step 4: 同步到组合记录系统
-Step 5: 追加 memory note
-```
-
-### 9.2 任何交易决策前
-
-```
-1. 查 ASSET_CLASS（A/B/C）
-2. 查 IS_HELD（持仓 vs 观察池）
-3. 跑 QMS 4 因子评分
-4. 按 (asset_class, is_held, qms_verdict) 三维查表给出 action
-5. 写 Pre-Trade Log（Decision ID/Date/Ticker/Intent/Reason/Signal/VIX/Panic/Delay/Final Action）
-6. 30 分钟延迟决策（恐慌期强制延迟）
-```
-
----
-
-## 十、数据源优先级
-
-| 数据类型 | 首选 | 备选 |
-|----------|------|------|
-| A 股 K 线/技术指标 | westock-data | AKShare |
-| A 股资金流/筹码 | westock-data | NeoData |
-| 美股行情/技术 | westock-data | Yahoo Finance |
+| Data Type | Primary | Fallback |
+|-----------|---------|----------|
+| US stock quotes/technicals | westock-data | Yahoo Finance |
+| A-share K-line/technicals | westock-data | AKShare |
+| HK stock quotes | westock-data | Yahoo Finance |
 | VIX | westock-data | Yahoo Finance |
-| 港股行情 | westock-data | Yahoo Finance |
-| 北向资金 | NeoData | AKShare |
-| 财报/一致预期 | westock-data | NeoData |
+| North-bound capital | NeoData | AKShare |
+| Financial reports/consensus | westock-data | NeoData |
 
 ---
 
-## 十一、常见错误（已踩过的坑）
+## 10. Common Mistakes
 
-| # | 错误 | 纠正 |
-|---|------|------|
-| P1 | 把 A 类资产当 B 类管理（v2.0 最严重错判） | 动手前问"这是 A 类还是 B 类？" |
-| P2 | 把"观察池"写成"减仓" | 决策前先问"这只持仓了吗？" |
-| P3 | 跨市场策略推到子页 | 跨市场推总策略页；专用细则推对应子页 |
-| P4 | 价格 LaTeX 陷阱（裸 `$xxx` 吞首位数字） | 必须用 `US$` / `HK$` / `￥` / `\$` |
-| P5 | code block 语言名错（`'plain'` 无效） | 必须用 `'plain text'`（含空格） |
-| P6 | 财报敏感性硬触发误用（一刀切已废） | 用豁免阀：浮盈 ≥+30% & 仓位 <30% → 不强减 |
-| P7 | 强行追求 A 股比例 | 通过对冲口工具实现风险分散 |
-| P8 | Override 超过 2/季配额 | 第 3 次自动作废 |
+| # | Mistake | Fix |
+|---|---------|-----|
+| P1 | Treating A-Class as B-Class (v2.0's worst error) | Ask "Is this A or B?" before acting |
+| P2 | Writing "reduce" for watchlist stocks | Ask "Is this held?" first |
+| P3 | Cross-market strategy pushed to sub-pages | Cross-market → main page; specific rules → sub-page |
+| P4 | LaTeX `$xxx` swallows first digit | Use `US$` / `HK$` / `¥` / `\$` |
+| P5 | Wrong code block language (`'plain'`) | Must use `'plain text'` (with space) |
 
 ---
 
-## 十二、设计哲学
+## Version History
 
-> **规则是栏杆不是牢笼。**
->
-> **覆盖规则不丢人，不记录覆盖才丢人。**
->
-> **承认市场异质性。** 核心赢家不能用周期股的方式管理。
->
-> **组合优先于选股，资产分层优先于规则细节，纪律优先于灵感。**
->
-> **系统的目标是年化正收益+可持续执行。** 不是每笔都赚钱，是长期下来系统比乱来好。
+| Version | Date | Summary |
+|---------|------|---------|
+| v2.1.2 | 2026-06-06 | Audit cleanup: bilingual README, remove legacy files |
+| v2.1.1 | 2026-06-04 | Mode D: A-class candidate zone entry (no observation delay) |
+| v2.1 | 2026-05-18 | A/B/C asset classification; 7 red lines; 4-factor QMS; trailing stop removed from A-class |
+| v2.0 | 2026-05-18 | Full rebuild: decision pyramid, 5-factor QMS, 10 red lines (replaced) |
+| v1.5 | 2026 Q1-Q2 | 3-condition engine, dual-mode entry, trailing stops |
 
 ---
 
-## 版本演进
-
-| 版本 | 日期 | 核心改动 |
-|------|------|----------|
-| v1.4 / v1.5.x | 2026 Q1-Q2 | 三条件 / 双模式 / 追踪止损 / 行为补丁迭代 |
-| v2.0 | 2026-05-18 | 完整重构：决策金字塔 + 5 因子 QMS + 10 红线（**已被 v2.1 取代**） |
-| **v2.1** | 2026-05-18 | A/B/C 资产分类、7 红线、4 因子 QMS、豁免阀、月换手 ≤15% |
-| **v2.1.1** | 2026-06-04 | 新增 §7.4 模式 D（A 类候选池建仓，不带观察延迟） |
-| **v2.1.2** | 2026-06-06 | **当前权威**：审计清理，README 中英双语重写，版本历史完整 |
-| v3.0 | 计划 2027 | 一年实战后基于复盘出 |
-
----
-
-## 详细参考
-
-- `references/a_share_strategy.md` — A 股策略完整版（三条件、弹性窗口、时间止损、调仓纪律）
-- `references/us_stock_strategy.md` — 美股策略完整版（A/B/C 分类详细操作、双模式、估值标尺、观察池）
-- `references/risk_control_and_overrides.md` — 组合风控、Override Protocol、QMS 评分、对冲触发器、财报豁免阀
+> 中文简介：InvAssistant 是一个多市场投资组合管理框架。按资产三层分类（A/B/C）执行差异化规则，7 条组合红线不可覆盖，4 因子 QMS 评分辅助决策。覆盖美股、A 股、港股。核心信念：组合优先于选股，纪律优先于灵感。规则是栏杆，不是牢笼。
