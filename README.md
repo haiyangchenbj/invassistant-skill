@@ -2,7 +2,7 @@
 
 A WorkBuddy/CodeBuddy Skill implementing a multi-asset investment strategy framework. Covers US, A-share, and HK stocks with asset-class differentiated rules, portfolio-level risk controls, and disciplined execution protocols.
 
-**Current version**: v2.1.3 (2026-06-06)
+**Current version**: v2.1.4 (2026-06-06)
 
 ## What It Does
 
@@ -27,8 +27,8 @@ Then ask WorkBuddy: "检查持仓" or "portfolio check".
 
 | Version | Date | Key Changes |
 |---------|------|-------------|
-| v2.1.3 | 2026-06-06 | SKILL.md rewrite: clean frontmatter, English primary, no version in title, remove internal references |
-| v2.1.2 | 2026-06-06 | Audit cleanup: bilingual README, remove legacy files |
+| v2.1.4 | 2026-06-06 | Clean publish: removed personal/ticker scripts, no meta docs. Framework-only. |
+| v2.1.3 | 2026-06-06 | SKILL.md rewrite: clean frontmatter, English primary, no version in title |
 | v2.1.1 | 2026-06-04 | Mode D: A-class candidate zone entry (no observation delay) |
 | v2.1 | 2026-05-18 | A/B/C asset classification; 7 red lines; 4-factor QMS; trailing stop removed for A-class |
 | v2.0 | 2026-05-18 | Full rebuild: decision pyramid, 5-factor QMS, 10 red lines (replaced by v2.1) |
