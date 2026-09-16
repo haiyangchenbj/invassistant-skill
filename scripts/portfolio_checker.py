@@ -1,11 +1,10 @@
-# -*- coding: utf-8 -*-
 """
 InvAssistant — 持仓组合检查主程序
 读取配置文件，按策略类型分发检查逻辑，生成信号报告。
 
 用法:
   python portfolio_checker.py                  # 检查全部持仓
-  python portfolio_checker.py --detail TSLA    # 单标的详细分析
+  python portfolio_checker.py --detail AAPL    # 单标的详细分析
   python portfolio_checker.py --push           # 检查并推送结果
   python portfolio_checker.py --json           # 输出 JSON 格式
 
@@ -32,7 +31,7 @@ sys.path.insert(0, str(SCRIPT_DIR))
 from data_fetcher import fetch_stock, fetch_all
 from redline_engine import (
     check_emotion, check_tech, check_market,
-    check_pullback, run_redline_check,
+    check_pullback, run_redline_check, run_trend_check,
     DEFAULT_REDLINE_PARAMS, DEFAULT_MARKET_PARAMS
 )
 from exit_engine import (
@@ -143,6 +142,25 @@ def format_signal_report(results, market_detail, timestamp, systemic_risk=None):
             lines.append(f"### {sym} ({info.get('name', '')}) — 卫星仓")
             lines.append(f"- 价格: ${price:.2f}")
             lines.append(f"- 操作: 不动")
+
+        elif strategy == "trend":
+            tl = info.get("trend_entry", {})
+            t1 = "✅" if tl.get("trend_1_trend", {}).get("passed") else "❌"
+            t2 = "✅" if tl.get("trend_2_breakout", {}).get("passed") else "❌"
+            t3 = "✅" if tl.get("trend_3_fundamental", {}).get("passed") else "❌"
+            t4 = "✅" if tl.get("trend_4_valuation", {}).get("passed") else "❌"
+            passed = tl.get("all_passed", False)
+            action = tl.get("action", "")
+            lines.append(f"### {sym} ({info.get('name', '')}) — 趋势确认入场")
+            lines.append(f"- 价格: ${price:.2f}")
+            lines.append(f"- 趋势确立: {t1} {tl.get('trend_1_trend', {}).get('detail', '')}")
+            lines.append(f"- 突破确认: {t2} {tl.get('trend_2_breakout', {}).get('detail', '')}")
+            lines.append(f"- 基本面支持: {t3} {tl.get('trend_3_fundamental', {}).get('detail', '')}")
+            lines.append(f"- 估值检查: {t4} {tl.get('trend_4_valuation', {}).get('detail', '')}")
+            lines.append(f"- **建仓: {'✅ ' + action if passed else '❌ ' + action}**")
+            if passed:
+                has_entry_signal = True
+                entry_items.append(f"{sym} 趋势确认全通过")
 
         # 退出信号
         exit_info = info.get("exit", {})
@@ -303,6 +321,17 @@ def run_full_check(config):
         elif strategy == "satellite":
             print(f"{sym:5} | ${price:.2f} | 卫星不动")
 
+        elif strategy == "trend":
+            # 模式B：趋势确认入场
+            tl_result = run_trend_check(df, market_data, params, {"vix_threshold": vix_threshold})
+            result_entry["trend_entry"] = tl_result
+            t1 = tl_result.get("trend_1_trend", {})
+            t2 = tl_result.get("trend_2_breakout", {})
+            action = tl_result["action"]
+            print(f"{sym:5} | ${price:.2f} | 趋势:{t1.get('detail','')} 突破:{t2.get('detail','')}")
+            prefix = "✅" if tl_result["all_passed"] else "❌"
+            print(f"     | 趋势确认 | {prefix} {action}")
+
         # ---- 退出信号检查 ----
         exit_result = run_exit_check(df, exit_params)
         result_entry["exit"] = exit_result
@@ -343,6 +372,11 @@ def run_full_check(config):
         for r in results.values()
         if r["strategy"] == "redline"
     )
+    has_trend_signal = any(
+        r.get("trend_entry", {}).get("all_passed", False)
+        for r in results.values()
+        if r["strategy"] == "trend"
+    )
     has_pullback_signal = any(
         r.get("pullback", {}).get("signal", False)
         for r in results.values()
@@ -350,11 +384,13 @@ def run_full_check(config):
     )
 
     redline_names = [r["symbol"] for r in results.values() if r.get("redline", {}).get("all_passed")]
+    trend_names = [r["symbol"] for r in results.values() if r.get("trend_entry", {}).get("all_passed")]
     pullback_names = [r["symbol"] for r in results.values() if r.get("pullback", {}).get("signal")]
 
     print(f"\n  📈 入场:")
-    print(f"  1️⃣ 情绪错配: {', '.join(redline_names) if redline_names else '无'}")
-    print(f"  2️⃣ 核心低估: {', '.join(pullback_names) if pullback_names else '无'}")
+    print(f"  1️⃣ 情绪错配(模式A): {', '.join(redline_names) if redline_names else '无'}")
+    print(f"  2️⃣ 趋势确认(模式B): {', '.join(trend_names) if trend_names else '无'}")
+    print(f"  3️⃣ 核心低估: {', '.join(pullback_names) if pullback_names else '无'}")
 
     # 退出信号汇总
     exit_signals = []
@@ -374,13 +410,15 @@ def run_full_check(config):
     print(f"\n  🛡️ 风险:")
     print(f"  3️⃣ 系统风险: {'⚠️' + systemic_level.upper() if systemic_level != 'none' else '正常'}")
 
-    has_entry = has_redline_signal or has_pullback_signal
+    has_entry = has_redline_signal or has_trend_signal or has_pullback_signal
     has_exit = len(exit_signals) > 0
     has_signal = has_entry or has_exit
 
     conclusion_parts = []
-    if has_entry:
-        conclusion_parts.append("存在入场信号")
+    if has_redline_signal or has_trend_signal:
+        conclusion_parts.append("存在入场信号(模式A/B)")
+    elif has_pullback_signal:
+        conclusion_parts.append("存在回调加仓信号")
     if has_exit:
         conclusion_parts.append("存在退出信号")
     if systemic_level in ("panic", "extreme"):
@@ -685,7 +723,7 @@ def do_push(config, report_text):
 
 def main():
     parser = argparse.ArgumentParser(description="InvAssistant 持仓信号检查")
-    parser.add_argument("--detail", metavar="SYMBOL", help="单标的详细分析 (如 TSLA)")
+    parser.add_argument("--detail", metavar="SYMBOL", help="单标的详细分析 (如 AAPL)")
     parser.add_argument("--push", action="store_true", help="检查完成后推送结果")
     parser.add_argument("--json", action="store_true", help="输出 JSON 格式")
     parser.add_argument("--config", help="配置文件路径")
