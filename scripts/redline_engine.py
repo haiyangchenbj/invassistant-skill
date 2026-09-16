@@ -1,14 +1,13 @@
-# -*- coding: utf-8 -*-
 """
-InvAssistant — 三条红线检查引擎
-核心的建仓过滤条件检查，支持配置化参数。
+InvAssistant — 入场引擎 v1.5
+支持双模式入场：模式A（恐慌入场/三红线）+ 模式B（趋势确认入场）。
+v1.5.2 新增：叙事驱动型成长股(Narrative Growth)估值分类。
 
-三条红线：
-  红线1 — 情绪释放型下跌 (单日跌≥4% 或 连续3天下跌)
-  红线2 — 技术止跌信号 (缩量/均线强承接/Higher Low)
-  红线3 — 市场未进入系统性风险 (QQQ/SPX未连续暴跌, VIX<25)
+模式选择逻辑：
+  VIX > 20 或 近月大盘跌 > 5% → 用模式A（等恐慌入场）
+  VIX < 20 且 大盘MA50以上   → 用模式B（趋势确认入场）
 
-重要：红线是过滤条件(Filter)，全部通过才可建仓，不是评分制(Scoring)。
+红线是过滤条件(Filter)，全部通过才可建仓，不是评分制(Scoring)。
 """
 import pandas as pd
 
@@ -18,9 +17,17 @@ DEFAULT_REDLINE_PARAMS = {
     "emotion_drop_threshold": -4,   # 单日跌幅触发阈值 (%)
     "consecutive_days": 3,          # 连续下跌天数触发阈值
     "ma_proximity": 0.03,           # 均线接近度 (3%)
-    "bounce_threshold": 1.5,        # 强反弹涨幅阈值 (%)
-    "volume_ratio": 1.2,            # 放量判定倍数 (120%)
-    "entry_size": 0.3               # 建仓仓位 (30%)
+    "bounce_threshold": 1.5,         # 强反弹涨幅阈值 (%)
+    "volume_ratio": 1.2,             # 放量判定倍数 (120%)
+    "entry_size": 0.3                # 建仓仓位 (30%)
+}
+
+# 模式B（趋势确认入场）参数
+DEFAULT_TREND_PARAMS = {
+    "ma_period": 50,                # 趋势均线周期
+    "breakout_period": 20,           # 突破前高点周期
+    "volume_surge": 1.2,             # 放量倍数 (>5日均量)
+    "entry_size": 0.2                # 模式B仓位（比模式A保守）
 }
 
 DEFAULT_MARKET_PARAMS = {
@@ -295,3 +302,283 @@ def run_redline_check(df, market_data, params=None, market_params=None):
         "all_passed": all_passed,
         "action": action
     }
+
+
+# ============ 模式B：趋势确认入场 ============
+
+def check_trend_entry(df, params=None):
+    """
+    模式B：趋势确认入场 — 四条件全部满足才可入场。
+
+    条件1：趋势确立 — 价格站上MA50且MA50向上
+    条件2：突破确认 — 突破近20日高点 + 放量(>5日均量120%)
+    条件3：基本面支持 — 最近一季营收+利润双增长（需手动配置）
+    条件4：估值不离谱 — 需在 params 显式配置 valuation_ok=true（人工按分类标尺判断后确认）
+
+    Args:
+        df: 股票 OHLCV DataFrame
+        params: 含 ma_period, breakout_period, volume_surge 的参数 dict
+
+    Returns:
+        (passed: bool, detail: str, failed_conditions: list)
+    """
+    if df is None or len(df) < 60:
+        return False, "数据不足(需要60日数据)", ["数据不足"]
+
+    p = {**DEFAULT_TREND_PARAMS, **(params or {})}
+    ma_period = p["ma_period"]
+    break_period = p["breakout_period"]
+    vol_surge = p["volume_surge"]
+
+    df = df.copy()
+    ma = df["Close"].rolling(ma_period).mean()
+    df["MA"] = ma
+
+    latest = df.iloc[-1]
+    close = latest["Close"]
+    ma_val = latest["MA"]
+
+    signals = []
+    failed = []
+
+    # 条件1：趋势确立 — 价格站上MA50且MA50向上
+    if pd.notna(ma_val) and close > ma_val:
+        # MA向上：最近5日均线值递增
+        ma_series = df["MA"].dropna()
+        if len(ma_series) >= 5:
+            ma_recent = ma_series.tail(5).values
+            if all(ma_recent[i] <= ma_recent[i+1] for i in range(4)):
+                signals.append("✓ 趋势确立：站上MA" + str(ma_period) + "且均线向上")
+            else:
+                failed.append("趋势：价格站上MA" + str(ma_period) + "但均线未向上")
+        else:
+            signals.append("✓ 趋势确立：站上MA" + str(ma_period))
+    else:
+        failed.append("趋势：未站上MA" + str(ma_period))
+
+    # 条件2：突破确认 — 突破近N日高点 + 放量
+    high_period = df["High"].tail(break_period).max()
+    vol_avg_5 = df["Volume"].tail(5).mean()
+    today_vol = latest["Volume"]
+    latest_close = close
+
+    if latest_close >= high_period:
+        if today_vol >= vol_avg_5 * vol_surge:
+            signals.append(f"✓ 突破确认：突破{break_period}日高点(${high_period:.2f})+放量(量比{today_vol/vol_avg_5:.1f}x)")
+        else:
+            signals.append(f"✗ 突破确认失败：突破{break_period}日高点(${high_period:.2f})但放量不足(量比{today_vol/vol_avg_5:.1f}x)")
+            failed.append("放量不足")
+    else:
+        failed.append(f"突破：未突破{break_period}日高点(现价${latest_close:.2f} vs ${high_period:.2f})")
+
+    # 条件3：基本面支持（需在 params 中手动配置）
+    fundamental_ok = params.get("fundamental_ok", False) if params else False
+    if fundamental_ok:
+        signals.append("✓ 基本面：最近一季营收+利润双增长")
+    else:
+        failed.append("基本面：未配置 fundamental_ok=true")
+
+    # 条件4：估值不离谱（fail-closed：需在 params 中显式配置 valuation_ok=true）
+    valuation_ok = params.get("valuation_ok", False) if params else False
+    valuation_category = params.get("valuation_category", "standard") if params else "standard"
+    if valuation_ok:
+        if valuation_category == "narrative_growth":
+            signals.append("✓ 估值：叙事成长股，已人工确认不离谱（valuation_ok=true）")
+        else:
+            signals.append("✓ 估值：传统估值标的，已人工确认不离谱（valuation_ok=true）")
+    else:
+        failed.append("估值：未配置 valuation_ok=true（按分类标尺人工判断后确认）")
+
+    all_passed = len(failed) == 0
+    detail = "; ".join(signals)
+    if failed:
+        detail += " | 未通过: " + ", ".join(failed)
+    return all_passed, detail, failed
+
+
+def determine_entry_mode(market_data, params=None):
+    """
+    根据市场环境决定使用哪种入场模式。
+
+    VIX > 20 或 近月大盘跌 > 5% → 模式A（恐慌入场）
+    VIX < 20 且 大盘MA50以上   → 模式B（趋势确认入场）
+
+    Args:
+        market_data: dict 包含 ^VIX 和 QQQ 的 DataFrame
+        params: 配置参数 dict
+
+    Returns:
+        str: "mode_a" | "mode_b"
+    """
+    vix_df = market_data.get("^VIX")
+    qqq_df = market_data.get("QQQ")
+
+    if vix_df is None:
+        return "mode_a"  # 默认保守
+
+    latest_vix = vix_df["Close"].iloc[-1]
+    vix_threshold = params.get("vix_threshold", 25) if params else 25
+
+    if latest_vix > 20:
+        return "mode_a"
+
+    if qqq_df is not None and len(qqq_df) >= 25:
+        qqq = qqq_df.copy()
+        qqq["MA50"] = qqq["Close"].rolling(50).mean()
+        latest_close = qqq["Close"].iloc[-1]
+        latest_ma50 = qqq["MA50"].iloc[-1]
+        if pd.notna(latest_ma50) and latest_close > latest_ma50:
+            # 近月跌幅
+            month_ago = qqq["Close"].iloc[-21] if len(qqq) >= 21 else qqq["Close"].iloc[0]
+            pct_change = (latest_close - month_ago) / month_ago * 100
+            if pct_change < -5:
+                return "mode_a"
+
+        if pd.notna(latest_ma50) and latest_close <= latest_ma50:
+            return "mode_a"
+    else:
+        return "mode_a"
+
+    return "mode_b"
+
+
+def run_trend_check(df, market_data, params=None, market_params=None):
+    """
+    执行模式B（趋势确认入场）的完整检查。
+
+    Returns:
+        dict 包含 trend1-4, all_passed, action
+    """
+    p = {**DEFAULT_TREND_PARAMS, **(params or {})}
+
+    df_copy = df.copy() if df is not None else None
+    ma_period = p["ma_period"]
+    break_period = p["breakout_period"]
+    vol_surge = p["volume_surge"]
+
+    detail_parts = []
+    failed_conditions = []
+    all_passed = False
+
+    if df_copy is None or len(df_copy) < 60:
+        return {
+            "trend_1_trend": {"passed": False, "detail": "数据不足"},
+            "trend_2_breakout": {"passed": False, "detail": "数据不足"},
+            "trend_3_fundamental": {"passed": False, "detail": "数据不足"},
+            "trend_4_valuation": {"passed": False, "detail": "数据不足"},
+            "all_passed": False,
+            "action": "不建仓 | 数据不足"
+        }
+
+    ma = df_copy["Close"].rolling(ma_period).mean()
+    df_copy["MA"] = ma
+    latest = df_copy.iloc[-1]
+    close = latest["Close"]
+    ma_val = latest["MA"]
+
+    # 条件1：趋势确立
+    trend1_pass = False
+    trend1_detail = "未通过"
+    if pd.notna(ma_val) and close > ma_val:
+        ma_series = df_copy["MA"].dropna()
+        if len(ma_series) >= 5:
+            ma_recent = ma_series.tail(5).values
+            if all(ma_recent[i] <= ma_recent[i+1] for i in range(4)):
+                trend1_pass = True
+                trend1_detail = f"✓ 站上MA{ma_period}且均线向上"
+    if not trend1_pass:
+        failed_conditions.append("趋势未确立")
+
+    # 条件2：突破确认
+    trend2_pass = False
+    trend2_detail = "未通过"
+    high_period = df_copy["High"].tail(break_period).max()
+    vol_avg_5 = df_copy["Volume"].tail(5).mean()
+    today_vol = latest["Volume"]
+    if close >= high_period and today_vol >= vol_avg_5 * vol_surge:
+        trend2_pass = True
+        trend2_detail = f"✓ 突破{break_period}日高点+放量(量比{today_vol/vol_avg_5:.1f}x)"
+    elif close >= high_period:
+        trend2_pass = False  # fail-closed：突破但放量不足不构成确认
+        trend2_detail = f"✗ 突破{break_period}日高点但放量不足(量比{today_vol/vol_avg_5:.1f}x < {vol_surge}x)"
+        failed_conditions.append("突破未确认（放量不足）")
+    else:
+        failed_conditions.append("突破未确认")
+
+    # 条件3：基本面
+    fundamental_ok = params.get("fundamental_ok", False) if params else False
+    trend3_pass = fundamental_ok
+    trend3_detail = "✓ 基本面支持" if fundamental_ok else "✗ 未配置基本面确认"
+
+    # 条件4：估值（fail-closed：需在 params 中显式配置 valuation_ok=true）
+    valuation_category = params.get("valuation_category", "standard") if params else "standard"
+    valuation_ok = params.get("valuation_ok", False) if params else False
+    if valuation_ok:
+        trend4_pass = True
+        trend4_detail = f"✓ 估值确认（类别 {valuation_category}，已人工确认不离谱）"
+    else:
+        trend4_pass = False
+        trend4_detail = f"✗ 未配置估值确认（valuation_ok=true；类别 {valuation_category} 需按对应标尺人工判断后确认）"
+
+    all_passed = trend1_pass and trend2_pass and trend3_pass and trend4_pass
+
+    entry_size = p.get("entry_size", 0.2)
+    if all_passed:
+        action = f"模式B四条件全部通过 → 可建仓{int(entry_size*100)}%"
+    else:
+        action = f"不建仓 | 未通过: {', '.join(failed_conditions)}"
+
+    return {
+        "trend_1_trend": {"passed": trend1_pass, "detail": trend1_detail},
+        "trend_2_breakout": {"passed": trend2_pass, "detail": trend2_detail},
+        "trend_3_fundamental": {"passed": trend3_pass, "detail": trend3_detail},
+        "trend_4_valuation": {"passed": trend4_pass, "detail": trend4_detail},
+        "all_passed": all_passed,
+        "action": action
+    }
+
+
+def classify_narrative_growth(params=None):
+    """
+    判断标的是否属于叙事驱动型成长股(Narrative Growth)。
+
+    识别条件（满足任意2条）：
+    - 3年Forward PE 25分位 > 行业中位数 × 2
+    - EPS增速预期 > 行业均值 × 2
+    - 业务含多叙事（AI/机器人/FSD等超越传统分类）
+
+    Args:
+        params: 含 valuation_indicators 的参数 dict
+
+    Returns:
+        bool: 是否为叙事驱动型成长股
+    """
+    if params is None:
+        return False
+
+    indicators = params.get("valuation_indicators", {})
+    if not indicators:
+        return False
+
+    conditions_met = 0
+
+    # 条件1：Forward PE偏高
+    pe_ratio = indicators.get("forward_pe_25th_percentile", 0)
+    industry_pe = indicators.get("industry_pe_median", 1)
+    if pe_ratio > 0 and industry_pe > 0 and pe_ratio > industry_pe * 2:
+        conditions_met += 1
+
+    # 条件2：EPS增速远超行业
+    eps_growth = indicators.get("eps_growth_expected", 0)
+    industry_growth = indicators.get("industry_eps_growth_avg", 1)
+    if eps_growth > 0 and industry_growth > 0 and eps_growth > industry_growth * 2:
+        conditions_met += 1
+
+    # 条件3：含多叙事标签
+    narratives = indicators.get("narrative_tags", [])
+    high_narrative_keywords = ["AI", "机器人", "FSD", "自动驾驶", "大模型", "AGI", "量子计算"]
+    matches = sum(1 for n in narratives if any(k in str(n) for k in high_narrative_keywords))
+    if matches >= 2:
+        conditions_met += 1
+
+    return conditions_met >= 2
