@@ -42,6 +42,9 @@ Mitigation: Review proposed state changes before applying them and keep rule upd
 - [A-Share Strategy](references/a_share_strategy.md)
 - [Risk Control and Overrides](references/risk_control_and_overrides.md)
 - [Candidate Admission Gates](references/candidate_admission_gates.md)
+- [Capital Plan Audit](references/capital_plan_audit.md)
+- [Derived Price Governance](references/derived_price_governance.md)
+- [Changelog](CHANGELOG.md)
 
 ## Skill Output:
 
@@ -55,7 +58,7 @@ Mitigation: Review proposed state changes before applying them and keep rule upd
 
 ## Skill Version(s):
 
-2.3.15 (source: SKILL.md frontmatter, README, server release metadata)
+2.3.18 (source: SKILL.md frontmatter, CHANGELOG.md, server release metadata)
 
 ## Ethical Considerations:
 
