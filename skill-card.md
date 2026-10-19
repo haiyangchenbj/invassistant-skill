@@ -58,7 +58,7 @@ Mitigation: Review proposed state changes before applying them and keep rule upd
 
 ## Skill Version(s):
 
-2.3.18 (source: SKILL.md frontmatter, CHANGELOG.md, server release metadata)
+2.3.19 (source: SKILL.md frontmatter, CHANGELOG.md, server release metadata)
 
 ## Ethical Considerations:
 
