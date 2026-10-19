@@ -13,7 +13,7 @@ description: >
   子质量管理，覆盖美股/A股/港股的纪律化进出场逻辑。触发词：投资组合管理、持仓复盘、
   风险红线检查、仓位规则.
 description_zh: "多资产投资组合管理框架：A/B/C 类资产差异化规则、7 条红线组合风险控制、四因子质量管理；覆盖美股、A 股、港股，纪律化进出场逻辑。"
-version: "2.3.18"
+version: "2.3.19"""
 read_when:
   - "User requests portfolio review, A/B/C asset classification, or 7-red-line risk check for their holdings"
   - "User asks about entry/exit logic for US stocks, A-shares (China), or HK stocks under the framework"
@@ -334,7 +334,7 @@ Every price in this framework that is *computed* rather than *quoted* is a deriv
 
 Full history: **[CHANGELOG.md](CHANGELOG.md)** — authoritative for every release, moved out of this file at v2.3.17 so the always-read file carries only operative rules.
 
-Current: **v2.3.18** (2026-09-20) — frontmatter `permissions` block + `network` token added; data-transmission notice corrected.
+Current: **v2.3.19** (2026-10-19) — hard rule 13 added: same-day position-change records; backfilled records flagged and excluded from override quotas.
 
 ---
 
