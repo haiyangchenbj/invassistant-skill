@@ -1,7 +1,7 @@
 
 A WorkBuddy/CodeBuddy Skill implementing a multi-asset investment strategy framework. Covers US, A-share, and HK stocks with asset-class differentiated rules, portfolio-level risk controls, and disciplined execution protocols.
 
-**Current version**: v2.3.18 (2026-09-20)
+**Current version**: v2.3.19 (2026-09-20)
 
 ## What It Does
 
@@ -32,7 +32,7 @@ Recent releases only. **[CHANGELOG.md](CHANGELOG.md)** is authoritative and carr
 
 | Version | Date | Key Changes |
 |---------|------|-------------|
-| v2.3.18 | 2026-09-20 | LP1 fix: frontmatter `permissions` block added (quote endpoint, webhook URLs, notification credential env-var names) + `network` token in `allowed-tools` — declaring the outbound behaviors the body already disclosed; data-transmission notice corrected |
+| v2.3.19 | 2026-09-20 | LP1 fix: frontmatter `permissions` block added (quote endpoint, webhook URLs, notification credential env-var names) + `network` token in `allowed-tools` — declaring the outbound behaviors the body already disclosed; data-transmission notice corrected |
 | v2.3.17 | 2026-09-17 | Restructure: §12 and §13 moved to `references/capital_plan_audit.md` and `references/derived_price_governance.md`, leaving the operating spine inline (the five-step loop, what a clean validator run does not tell you, the A1-A5 detection table). No rule text deleted — all of it relocated verbatim and cross-linked from §12/§13 and from the Reference Files table. Splitting so that the always-read file does not have to be skimmed, which is the same failure mode D10 addresses inside a registry |
 | v2.3.16 | 2026-09-17 | Add D9 (an unsettled question needs its own ledger — one absorptive register, a per-entry blocking scope, adjudication deliberately outside pass/fail, mirrors that replicate values but not disputes) + D10 (keep the registry executable and move chronology to a companion file; guard the shape, not only the size; derive size targets from a measured floor) + the "a green validator is not an action permit" rule in D4 + mistakes P11/P12 |
 | v2.3.15 | 2026-09-16 | Hardening per scanner findings: valuation gate + volume confirmation fail-closed in `redline_engine.py`; Framework Scope and Bundled Scripts section; allowed-tools completion; data-transmission notices; pinned requirements |
