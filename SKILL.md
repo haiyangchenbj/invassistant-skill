@@ -13,7 +13,7 @@ description: >
   子质量管理，覆盖美股/A股/港股的纪律化进出场逻辑。触发词：投资组合管理、持仓复盘、
   风险红线检查、仓位规则.
 description_zh: "多资产投资组合管理框架：A/B/C 类资产差异化规则、7 条红线组合风险控制、四因子质量管理；覆盖美股、A 股、港股，纪律化进出场逻辑。"
-version: "2.3.19"""
+version: "2.3.20"
 read_when:
   - "User requests portfolio review, A/B/C asset classification, or 7-red-line risk check for their holdings"
   - "User asks about entry/exit logic for US stocks, A-shares (China), or HK stocks under the framework"
@@ -61,7 +61,7 @@ metadata:
 
 # InvAssistant
 
-> Multi-asset investment portfolio management framework — current version v2.3.18 (2026-09-20).
+> Multi-asset investment portfolio management framework — current version v2.3.19 (2026-10-19).
 > Core philosophy: portfolio before stock-picking, discipline before inspiration. Rules are guardrails, not cages.
 
 > ⚠️ **Risk Warning**: This is a decision-support framework, not financial advice. AI guidance is probabilistic; all action triggers — including rule-based alerts and entry thresholds — require human review before any execution. Author assumes no liability for trading losses.
