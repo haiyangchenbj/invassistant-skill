@@ -1,6 +1,6 @@
 ## Description:
 
-InvAssistant provides a multi-asset investment portfolio management framework with A/B/C asset-class rules, seven portfolio risk controls, QMS quality scoring, and disciplined entry and exit logic for US, A-share, and HK stocks.
+InvAssistant helps review US, A-share, and Hong Kong stock portfolios using asset-class rules, portfolio risk controls, and quality scoring, without placing trades.
 
 This skill is ready for commercial/non-commercial use.
 
@@ -14,7 +14,7 @@ MIT-0
 
 ## Use Case:
 
-External users and developers use this skill to review portfolios, classify holdings and candidates, check concentration and drawdown rules, and produce advisory entry or exit observations under the documented framework. It is decision support, not tax, legal, regulatory, or individualized financial advice.
+Investors and portfolio reviewers use this skill to classify holdings, check portfolio risk limits, and evaluate entry or exit decisions across US, mainland Chinese, and Hong Kong equities. Its reports and suggested actions are decision support, not autonomous trading or personalized financial advice.
 
 ### Deployment Geography for Use:
 
@@ -22,43 +22,41 @@ Global
 
 ## Known Risks and Mitigations:
 
-Risk: Sensitive portfolio details may be sent to arbitrary webhook destinations.
+Risk: Portfolio suggestions may influence financial decisions.
 
-Mitigation: Keep webhook push disabled unless the destination is verified, use official HTTPS provider URLs, and redact portfolio details before sending reports.
+Mitigation: Review proposed actions and the underlying portfolio data yourself before acting.
 
-Risk: Generated entry and exit signals may be mistaken for financial advice or execution instructions.
+Risk: Enabled webhook notifications may send report contents to a configured endpoint.
 
-Mitigation: Treat outputs as advisory and manually verify market data, cost basis, rule checks, and portfolio context before acting.
+Mitigation: Check webhook URLs before enabling pushes and keep notification secrets in environment variables or private configuration.
 
-Risk: Persisted portfolio rules or automation prompts can preserve incorrect assumptions.
+Risk: Edits to local portfolio or configuration files may affect later assessments.
 
-Mitigation: Review proposed state changes before applying them and keep rule updates logged with source and timestamp.
+Mitigation: Review local portfolio and configuration changes before relying on future reports.
 
 ## Reference(s):
 
-- [ClawHub Skill Page](https://clawhub.ai/haiyangchenbj/skills/invassistant)
-- [README](README.md)
-- [US Stock Strategy](references/us_stock_strategy.md)
-- [A-Share Strategy](references/a_share_strategy.md)
-- [Risk Control and Overrides](references/risk_control_and_overrides.md)
-- [Candidate Admission Gates](references/candidate_admission_gates.md)
-- [Capital Plan Audit](references/capital_plan_audit.md)
-- [Derived Price Governance](references/derived_price_governance.md)
-- [Changelog](CHANGELOG.md)
+- [InvAssistant release on ClawHub](https://clawhub.ai/haiyangchenbj/skills/invassistant)
+- [US stock strategy](artifact/references/us_stock_strategy.md)
+- [A-share strategy](artifact/references/a_share_strategy.md)
+- [Portfolio risk controls and overrides](artifact/references/risk_control_and_overrides.md)
+- [Candidate admission gates](artifact/references/candidate_admission_gates.md)
+- [Capital plan consistency audit](artifact/references/capital_plan_audit.md)
+- [Derived price level governance](artifact/references/derived_price_governance.md)
 
 ## Skill Output:
 
-**Output Type(s):** [text, markdown, code, shell commands, configuration, guidance]
+**Output Type(s):** [Analysis, Markdown, Configuration instructions, Shell commands]
 
-**Output Format:** [Markdown reports, JSON portfolio check output, Python helper scripts, and configuration instructions]
+**Output Format:** [Text or Markdown guidance and portfolio reports; optional local JSON configuration and reports]
 
 **Output Parameters:** [1D]
 
-**Other Properties Related to Output:** [Outputs should carry data source and timestamp annotations where numeric market or portfolio values are used.]
+**Other Properties Related to Output:** [Optional market-data fetching and user-enabled webhook report notifications]
 
 ## Skill Version(s):
 
-2.3.19 (source: SKILL.md frontmatter, CHANGELOG.md, server release metadata)
+2.3.19 (source: server-resolved release metadata and skill frontmatter)
 
 ## Ethical Considerations:
 
