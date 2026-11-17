@@ -13,7 +13,7 @@ description: >
   子质量管理，覆盖美股/A股/港股的纪律化进出场逻辑。触发词：投资组合管理、持仓复盘、
   风险红线检查、仓位规则.
 description_zh: "多资产投资组合管理框架：A/B/C 类资产差异化规则、7 条红线组合风险控制、四因子质量管理；覆盖美股、A 股、港股，纪律化进出场逻辑。"
-version: "2.3.20"
+version: "2.3.21"
 read_when:
   - "User requests portfolio review, A/B/C asset classification, or 7-red-line risk check for their holdings"
   - "User asks about entry/exit logic for US stocks, A-shares (China), or HK stocks under the framework"
@@ -221,6 +221,7 @@ QMS = 0.35 × Earnings Trend
 10. Every override must be logged
 11. Max 2 overrides per ticker per quarter; 3rd is void
 12. Daily self-check: 5 questions, all "no" = no trade today
+13. Same-day position-change records are mandatory; backfilled records are flagged and excluded from override quotas
 
 ---
 
